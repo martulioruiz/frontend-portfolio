@@ -3,6 +3,7 @@ import { GLSLConstants } from 'src/app/shared/GLSLConstants';
 import fragmentShaderSrc from '../../../../../assets/toucan-fragment-shader.glsl';
 import vertexShaderSrc from '../../../../../assets/toucan-vertex-shader.glsl';
 import * as matrix from 'gl-matrix';
+import {mat4} from "gl-matrix";
 @Injectable({
   providedIn: 'root',
 })
@@ -26,20 +27,56 @@ export class WebGLService {
     return this.gl.canvas as Element
   }
 
-
+ /**
+  * Variables for setting up the perspective for the {@link projectionMatrix}.
+  */
   private fieldOfView = (45 * Math.PI) / 180; // in radians
   private aspect = 1;
   private zNear = 0.1;
   private zFar = 100.0;
+
+  /**
+   * The projection matrix (camera / what we see through).
+   */
   private projectionMatrix = matrix.mat4.create();
+
+  /**
+   * The model-view matrix (what we view).
+   */
   private modelViewMatrix = matrix.mat4.create();
-  private buffers: any
-  private programInfo: any
+
+  /**
+   * JS object that stores buffers
+   */
+  private buffers: any;
+
+  /**
+   * JS object that stores WebGL program information.
+   */
+  private programInfo: any;
+
+  /**
+   * Gets the {@link modelViewMatrix}.
+   *
+   * @returns modelViewMatrix
+   */
+  getModelViewMatrix(): mat4 {
+    return this.modelViewMatrix;
+  }
 
   /**
    * Creates a new instance of the {@link WebGLService} class.
    */
   constructor() {}
+
+  /**
+   * Formats the scene for rendering (by resizing the WebGL canvas and setting the defaults for WebGL drawing).
+   */
+  public formatScene() {
+    this.updateWebGLCanvas();
+    this.resizeWebGLCanvas();
+    this.updateViewport();
+  }
 
   /**
    * Initialises a new {@link WebGLRenderingContext} as part of this service from the {@link canvas} provided.
@@ -64,9 +101,9 @@ export class WebGLService {
     let shaderProgram = this.initializeShaders();
 
     if(shaderProgram){
-       // set up programInfo for buffers
-    this.programInfo = {
-      program: shaderProgram,
+      // set up programInfo for buffers
+      this.programInfo = {
+        program: shaderProgram,
         attribLocations: {
           vertexPosition: this.gl.getAttribLocation(
             shaderProgram,
@@ -104,24 +141,24 @@ export class WebGLService {
    * [initializeShaders] provides the functions necessary for loading,
    * compiling and attaching vertex and fragment shaders into a shader program.
    */
-  initializeShaders(): WebGLProgram | null {
+  initializeShaders(): WebGLProgram | undefined{
     // 1. Create the shader program
     let shaderProgram = this.gl.createProgram();
 
-    if(shaderProgram){
-      // 2. compile the shaders
-      const compiledShaders = [];
-      let fragmentShader = this.loadShader(
-        fragmentShaderSrc,
-        GLSLConstants.fragmentShaderMimeType
-      );
-      let vertexShader = this.loadShader(
-        vertexShaderSrc,
-        GLSLConstants.vertexShaderMimeType
-      );
-      compiledShaders.push(fragmentShader);
-      compiledShaders.push(vertexShader);
+    // 2. compile the shaders
+    const compiledShaders = [];
+    let fragmentShader = this.loadShader(
+      fragmentShaderSrc,
+      GLSLConstants.fragmentShaderMimeType
+    );
+    let vertexShader = this.loadShader(
+      vertexShaderSrc,
+      GLSLConstants.vertexShaderMimeType
+    );
+    compiledShaders.push(fragmentShader);
+    compiledShaders.push(vertexShader);
 
+    if(shaderProgram){
       // 3. attach the shaders to the shader program using our WebGLContext
       if (compiledShaders && compiledShaders.length > 0) {
         for (let i = 0; i < compiledShaders.length; i++) {
@@ -146,10 +183,8 @@ export class WebGLService {
       // 6. return shader
       return shaderProgram;
     }else{
-      return null;
+      return undefined;
     }
-
-
   }
 
   /**
@@ -173,17 +208,6 @@ export class WebGLService {
    * Prepare's the WebGL context to render content.
    */
   prepareScene() {
-    this.resizeWebGLCanvas();
-    this.updateWebGLCanvas();
-
-    // move the camera position a bit backwards to a position where
-    // we can observe the content that will be drawn from a distance
-    matrix.mat4.translate(
-      this.modelViewMatrix, // destination matrix
-      this.modelViewMatrix, // matrix to translate
-      [0.0, 0.0, -6.0]      // amount to translate
-    );
-
     // tell WebGL how to pull out the positions from the position
     // buffer into the vertexPosition attribute
     this.bindVertexPosition(this.programInfo, this.buffers);
@@ -222,7 +246,7 @@ export class WebGLService {
 
   /**
    * Sets the {@link WebGLRenderingContext} canvas width and height based on the {@link HTMLCanvasElement} provided.
-z`   *
+   *
    * @param canvas - the {@link HTMLCanvasElement}
    */
   setWebGLCanvasDimensions(canvas: HTMLCanvasElement) {
@@ -302,7 +326,7 @@ z`   *
    * buffer into the vertexPosition attribute
    */
   private bindVertexPosition(programInfo: any, buffers: any) {
-    const bufferSize = 2;
+    const bufferSize = 3;
     const type = this.gl.FLOAT;
     const normalize = false;
     const stride = 0;
@@ -357,7 +381,7 @@ z`   *
 
   /**
    * Initialise the buffers we'll need. For this demo, we just
-   * have one object -- a simple two-dimensional square.
+   * have one object -- a simple three-dimensional cube.
    *
    * @returns {{position: WebGLBuffer}}
    */
@@ -370,10 +394,59 @@ z`   *
 
     // create an array of positions for the square.
     const positions = new Float32Array([
-       1.0,  1.0,
-      -1.0,  1.0,
-       1.0, -1.0,
-      -1.0, -1.0
+        // Front face
+        -1.0, -1.0,  1.0,
+         1.0, -1.0,  1.0,
+        -1.0,  1.0,  1.0,
+
+         1.0,  1.0,  1.0,
+        -1.0,  1.0,  1.0,
+         1.0, -1.0,  1.0,
+
+        // Back face
+        -1.0, -1.0, -1.0,
+        -1.0,  1.0, -1.0,
+         1.0,  1.0, -1.0,
+
+         1.0,  1.0, -1.0,
+         1.0, -1.0, -1.0,
+        -1.0, -1.0, -1.0,
+
+        // Top face
+        -1.0,  1.0, -1.0,
+        -1.0,  1.0,  1.0,
+         1.0,  1.0,  1.0,
+
+         1.0,  1.0,  1.0,
+         1.0,  1.0, -1.0,
+        -1.0,  1.0, -1.0,
+
+        // Bottom face
+        -1.0, -1.0, -1.0,
+         1.0, -1.0, -1.0,
+         1.0, -1.0,  1.0,
+
+         1.0, -1.0,  1.0,
+        -1.0, -1.0,  1.0,
+        -1.0, -1.0, -1.0,
+
+        // Right face
+        1.0, -1.0, -1.0,
+        1.0,  1.0, -1.0,
+        1.0,  1.0,  1.0,
+
+        1.0,   1.0,  1.0,
+        1.0,  -1.0,  1.0,
+        1.0,  -1.0, -1.0,
+
+        // Left face
+        -1.0, -1.0, -1.0,
+        -1.0, -1.0,  1.0,
+        -1.0,  1.0,  1.0,
+
+        -1.0,  1.0,  1.0,
+        -1.0,  1.0, -1.0,
+        -1.0, -1.0, -1.0
     ]);
 
     // set the list of positions into WebGL to build the
@@ -387,12 +460,24 @@ z`   *
     );
 
     // Set up the colors for the vertices
-    let colors = new Uint16Array([
-      1.0, 1.0, 1.0, 1.0, // white
-      1.0, 0.0, 0.0, 1.0, // red
-      0.0, 1.0, 0.0, 1.0, // green
-      0.0, 0.0, 1.0, 1.0, // blue
-    ]);
+    const faceColors = [
+      [1.0,  1.0,  1.0,  1.0],    // Front face: white
+      [1.0,  0.0,  0.0,  1.0],    // Back face: red
+      [0.0,  1.0,  0.0,  1.0],    // Top face: green
+      [0.0,  0.0,  1.0,  1.0],    // Bottom face: blue
+      [1.0,  1.0,  0.0,  1.0],    // Right face: yellow
+      [1.0,  0.0,  1.0,  1.0],    // Left face: purple
+    ];
+
+    // Convert the array of colors into a table for all the vertices.
+    let colors:any = [];
+    for (let j = 0; j < faceColors.length; ++j) {
+      const c = faceColors[j];
+
+      // Repeat each color six times for the three vertices of each triangle
+      // since we're rendering two triangles for each cube face
+      colors = colors.concat(c, c, c, c, c, c);
+    }
 
     const colorBuffer = this.gl.createBuffer();
     this.gl.bindBuffer(this.gl.ARRAY_BUFFER, colorBuffer);
@@ -404,7 +489,7 @@ z`   *
 
     return {
       position: positionBuffer,
-      color: colorBuffer,
+      color: colorBuffer
     };
   }
 
@@ -413,7 +498,7 @@ z`   *
    * @param shaderSource
    * @param shaderType
    */
-  private loadShader(shaderSource: string, shaderType: string): WebGLShader | null {
+  private loadShader(shaderSource: string, shaderType: string): WebGLShader | null{
     const shaderTypeAsNumber = this.determineShaderType(shaderType);
     if (shaderTypeAsNumber < 0) {
       return null;
@@ -437,7 +522,6 @@ z`   *
     }else{
       return null;
     }
-
 
   }
 
